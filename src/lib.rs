@@ -120,8 +120,8 @@ impl<I2C: I2c, Delay: DelayNs> LightSensor<I2C, Delay> {
 
 fn get_lux_raw_conversion_factor(it: i2c::IntegrationTime, gain: i2c::Gain) -> f32 {
     let gain_factor = match gain {
-        i2c::Gain::X1 => 1.0,
-        i2c::Gain::X2 => 2.0,
+        i2c::Gain::X2 => 1.0,
+        i2c::Gain::X1 => 2.0,
         i2c::Gain::X1_4 => 8.0,
         i2c::Gain::X1_8 => 16.0,
     };
