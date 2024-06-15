@@ -59,8 +59,8 @@ impl<I2C: I2c, Delay: DelayNs> LightSensor<I2C, Delay> {
         };
 
         lux = match gain {
-            i2c::Gain::X1 => lux * 2.0,
             i2c::Gain::X2 => lux,
+            i2c::Gain::X1 => lux * 2.0,
             i2c::Gain::X1_4 => lux * 8.0,
             i2c::Gain::X1_8 => lux * 16.0
         };
@@ -74,8 +74,8 @@ impl<I2C: I2c, Delay: DelayNs> LightSensor<I2C, Delay> {
         let integration_time = self.dev.get_integration_time().unwrap();
 
         let mut lux = match gain {
-            i2c::Gain::X1 => lux / 2.0,
             i2c::Gain::X2 => lux,
+            i2c::Gain::X1 => lux / 2.0,
             i2c::Gain::X1_4 => lux / 8.0,
             i2c::Gain::X1_8 => lux / 16.0
         };

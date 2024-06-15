@@ -4,7 +4,7 @@ pub mod constants;
 // Public imports
 use embedded_hal::{i2c::I2c, delay::DelayNs};
 
-use byteorder::{BigEndian, ByteOrder};
+use byteorder::{ByteOrder, LittleEndian};
 
 // Local imports
 
@@ -478,12 +478,12 @@ fn convert_and_write_u16<I2C: I2c, Delay: DelayNs>(dev: &mut LightSensorI2c<I2C,
 }
 
 fn convert_buffer_to_u16(buffer: &[u8]) -> Result<u16, ()> {
-let num = BigEndian::read_u16(buffer);
+let num = LittleEndian::read_u16(buffer);
 Ok(num)
 }
 
 fn convert_u16_to_buffer(buffer: &mut [u8], num: u16) -> Result<(), ()> {
-BigEndian::write_u16(buffer, num);
+LittleEndian::write_u16(buffer, num);
 Ok(())
 }
 
