@@ -2,7 +2,8 @@
 pub mod constants;
 
 // Public imports
-use embedded_hal::i2c::I2c;
+use embedded_hal::{i2c::I2c, delay::DelayNs};
+
 use byteorder::{BigEndian, ByteOrder};
 
 // Local imports
@@ -15,6 +16,7 @@ pub enum LightSensorI2cError {
 }
 
 
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Gain {
     X1 = 0b00,  // 1x gain
     X2 = 0b01,  // 2x gain
@@ -45,6 +47,7 @@ impl From<Gain> for u16 {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum IntegrationTime {
     Ms25 = 0b1100,
     Ms50 = 0b1000,
@@ -81,6 +84,7 @@ impl From<IntegrationTime> for u16 {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum PersistenceProtectNumber {
     N1 = 0b00,
     N2 = 0b01,
@@ -111,6 +115,7 @@ impl From<PersistenceProtectNumber> for u16 {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum PowerSavingMode {
     M1 = 0b00,  // Fastest, most current
     M2 = 0b01,
@@ -141,6 +146,7 @@ impl From<PowerSavingMode> for u16 {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum PowerSavingModeEnable {
     Disable = 0b0,
     Enable = 0b1
@@ -166,6 +172,7 @@ impl From<PowerSavingModeEnable> for u16 {
 }
 
 
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum InterruptEnable {
     Disable = 0b0,
     Enable = 0b1,
@@ -190,6 +197,7 @@ impl From<InterruptEnable> for u16 {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Shutdown {
     PowerOn,
     PowerOff
@@ -214,6 +222,7 @@ impl From<Shutdown> for u16 {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Threshold {
     NotExceeded = 0,
     Exceeded = 1,
@@ -238,6 +247,7 @@ impl From<Threshold> for u16 {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Address {
     Default,
     Alternative,
@@ -254,16 +264,17 @@ impl From<Address> for u8 {
 
 
 /// I2C wrapper for LightSensor
-pub struct LightSensorI2c<I2C>{
+pub struct LightSensorI2c<I2C, Delay>{
     i2c: I2C,
-    address: u8
+    address: u8,
+    delay: Delay
 }
 
 
-impl<I2C: I2c> LightSensorI2c<I2C>{
+impl<I2C: I2c, Delay: DelayNs> LightSensorI2c<I2C, Delay>{
     /// Create new LightSensorI2c.
-    pub fn new(i2c: I2C, address: u8) -> LightSensorI2c<I2C> {
-        LightSensorI2c { i2c, address }
+    pub fn new(i2c: I2C, address: u8, delay: Delay) -> LightSensorI2c<I2C, Delay> {
+        LightSensorI2c { i2c, address, delay}
     }
 
     pub fn get_gain(&mut self) -> Result<Gain, LightSensorI2cError> {
@@ -335,9 +346,14 @@ impl<I2C: I2c> LightSensorI2c<I2C>{
 
     pub fn set_shutdown(&mut self, shutdown: Shutdown) -> Result<(), LightSensorI2cError> {
         let old_state = read_and_convert_to_u16(self, constants::registers::SETTING_REG).unwrap();
-        let new_sate = insert_u16(old_state, 1, 1, shutdown.into());
+        let new_sate = insert_u16(old_state, 1, 1, shutdown.clone().into());
         convert_and_write_u16(self, constants::registers::SETTING_REG, new_sate).unwrap();
         
+        match shutdown {
+            Shutdown::PowerOn => self.delay.delay_ms(4),
+            _ => (),
+        }
+
         Ok(())
     }
 
@@ -425,7 +441,7 @@ impl<I2C: I2c> LightSensorI2c<I2C>{
 
 
 /// Get value from a specific register in sensor.
-pub fn read_from_register<I2C: I2c>(dev: &mut LightSensorI2c<I2C> , register: u8, buffer: &mut [u8]) -> Result<(), LightSensorI2cError> {
+pub fn read_from_register<I2C: I2c, Delay: DelayNs>(dev: &mut LightSensorI2c<I2C, Delay> , register: u8, buffer: &mut [u8]) -> Result<(), LightSensorI2cError> {
     match dev.i2c.write_read(dev.address, &[register], buffer) {
         Ok(_) => Ok(()),
         Err(_) => Err(LightSensorI2cError::IOError)
@@ -433,7 +449,7 @@ pub fn read_from_register<I2C: I2c>(dev: &mut LightSensorI2c<I2C> , register: u8
 }
 
 /// Set value from a specific register in sensor.
-pub fn write_to_register<I2C: I2c>(dev: &mut LightSensorI2c<I2C>, register: u8, bytes: &[u8]) -> Result<(), LightSensorI2cError> {
+pub fn write_to_register<I2C: I2c, Delay: DelayNs>(dev: &mut LightSensorI2c<I2C, Delay>, register: u8, bytes: &[u8]) -> Result<(), LightSensorI2cError> {
     let mut buffer = Vec::<u8>::with_capacity(1+bytes.len());
     buffer.push(register);
     for value in bytes {
@@ -447,14 +463,14 @@ pub fn write_to_register<I2C: I2c>(dev: &mut LightSensorI2c<I2C>, register: u8, 
 }
 
 
-fn read_and_convert_to_u16<I2C: I2c>(dev: &mut LightSensorI2c<I2C>, register: u8) -> Result<u16, LightSensorI2cError> {
+fn read_and_convert_to_u16<I2C: I2c, Delay: DelayNs>(dev: &mut LightSensorI2c<I2C, Delay>, register: u8) -> Result<u16, LightSensorI2cError> {
     let mut buffer = [0u8; 2];
     read_from_register(dev, register, &mut buffer).unwrap();
     let state = convert_buffer_to_u16(&buffer).unwrap();
     Ok(state)
 }
 
-fn convert_and_write_u16<I2C: I2c>(dev: &mut LightSensorI2c<I2C>, register: u8, state: u16) -> Result<(), LightSensorI2cError> {
+fn convert_and_write_u16<I2C: I2c, Delay: DelayNs>(dev: &mut LightSensorI2c<I2C, Delay>, register: u8, state: u16) -> Result<(), LightSensorI2cError> {
     let mut buffer = [0u8; 2];
     convert_u16_to_buffer(&mut buffer, state).unwrap();
     write_to_register(dev, register, &buffer).unwrap();
