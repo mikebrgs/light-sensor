@@ -346,7 +346,7 @@ impl<I2C: I2c, Delay: DelayNs> LightSensorI2c<I2C, Delay>{
 
     pub fn set_shutdown(&mut self, shutdown: Shutdown) -> Result<(), LightSensorI2cError> {
         let old_state = read_and_convert_to_u16(self, constants::registers::SETTING_REG).unwrap();
-        let new_sate = insert_u16(old_state, 1, 1, shutdown.clone().into());
+        let new_sate = insert_u16(old_state, 0, 1, shutdown.clone().into());
         convert_and_write_u16(self, constants::registers::SETTING_REG, new_sate).unwrap();
         
         match shutdown {
