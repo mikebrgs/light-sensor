@@ -93,19 +93,19 @@ impl<I2C: I2c, Delay: DelayNs> LightSensor<I2C, Delay> {
     pub fn get_ambient_light_lux(&mut self) -> Result<f32, LightSensorError> {
         let raw_lux = self.dev.get_ambient_light_output().unwrap();
 
-        // let lux = self.convert_raw_to_lux(raw_lux).unwrap();
-        // Ok(lux)
+        let lux = self.convert_raw_to_lux(raw_lux).unwrap();
+        Ok(lux)
 
-        let gain = self.dev.get_gain().unwrap();
-        let it = self.dev.get_integration_time().unwrap();
+        // let gain = self.dev.get_gain().unwrap();
+        // let it = self.dev.get_integration_time().unwrap();
 
-        let factor = get_lux_raw_conversion_factor(it, gain);
-        let lux = f64::from(raw_lux) * f64::from(factor);
-        if (gain == i2c::Gain::X1_4 || gain == i2c::Gain::X1_8) && lux > 1000.0 {
-            Ok(compensate_high_lux(lux) as f32)
-        } else {
-            Ok(lux as f32)
-        }
+        // let factor = get_lux_raw_conversion_factor(it, gain);
+        // let lux = f64::from(raw_lux) * f64::from(factor);
+        // if (gain == i2c::Gain::X1_4 || gain == i2c::Gain::X1_8) && lux > 1000.0 {
+        //     Ok(compensate_high_lux(lux) as f32)
+        // } else {
+        //     Ok(lux as f32)
+        // }
 
     }
 
@@ -118,31 +118,31 @@ impl<I2C: I2c, Delay: DelayNs> LightSensor<I2C, Delay> {
 }
 
 
-fn get_lux_raw_conversion_factor(it: i2c::IntegrationTime, gain: i2c::Gain) -> f32 {
-    let gain_factor = match gain {
-        i2c::Gain::X2 => 1.0,
-        i2c::Gain::X1 => 2.0,
-        i2c::Gain::X1_4 => 8.0,
-        i2c::Gain::X1_8 => 16.0,
-    };
-    let it_factor = match it {
-        i2c::IntegrationTime::Ms800 => 0.0036,
-        i2c::IntegrationTime::Ms400 => 0.0072,
-        i2c::IntegrationTime::Ms200 => 0.0144,
-        i2c::IntegrationTime::Ms100 => 0.0288,
-        i2c::IntegrationTime::Ms50 => 0.0576,
-        i2c::IntegrationTime::Ms25 => 0.1152,
-    };
-    gain_factor * it_factor
-}
+// fn get_lux_raw_conversion_factor(it: i2c::IntegrationTime, gain: i2c::Gain) -> f32 {
+//     let gain_factor = match gain {
+//         i2c::Gain::X2 => 1.0,
+//         i2c::Gain::X1 => 2.0,
+//         i2c::Gain::X1_4 => 8.0,
+//         i2c::Gain::X1_8 => 16.0,
+//     };
+//     let it_factor = match it {
+//         i2c::IntegrationTime::Ms800 => 0.0036,
+//         i2c::IntegrationTime::Ms400 => 0.0072,
+//         i2c::IntegrationTime::Ms200 => 0.0144,
+//         i2c::IntegrationTime::Ms100 => 0.0288,
+//         i2c::IntegrationTime::Ms50 => 0.0576,
+//         i2c::IntegrationTime::Ms25 => 0.1152,
+//     };
+//     gain_factor * it_factor
+// }
 
 
-pub fn compensate_high_lux(lux: f64) -> f64 {
-    C3 * lux.powi(4)
-        - C2 * lux.powi(3)
-        + C1 * lux.powi(2)
-        + C0 * lux
-}
+// pub fn compensate_high_lux(lux: f64) -> f64 {
+//     C3 * lux.powi(4)
+//         - C2 * lux.powi(3)
+//         + C1 * lux.powi(2)
+//         + C0 * lux
+// }
 
 
 #[cfg(test)]
