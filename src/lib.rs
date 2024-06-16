@@ -42,70 +42,61 @@ impl<I2C: I2c, Delay: DelayNs> LightSensor<I2C, Delay> {
         sensor
     }
 
-    pub fn convert_to_lux(&mut self, raw: u16) -> Result<f32, LightSensorError> {
-        const LX_BIT: f32 = 0.0288;
+    pub fn convert_raw_to_lux(&mut self, raw: u16) -> Result<f32, LightSensorError> {
+        const LX_BIT: f64 = 0.0288;
 
         let gain = self.dev.get_gain().unwrap();
         let integration_time = self.dev.get_integration_time().unwrap();
 
-        let float_raw: f32 = raw.into();
-        let mut lux = match integration_time {
-            i2c::IntegrationTime::Ms25 => float_raw * LX_BIT * 4.0,
-            i2c::IntegrationTime::Ms50 => float_raw * LX_BIT * 2.0,
-            i2c::IntegrationTime::Ms100 => float_raw * LX_BIT,
-            i2c::IntegrationTime::Ms200 => float_raw * LX_BIT / 2.0,
-            i2c::IntegrationTime::Ms400 => float_raw * LX_BIT / 4.0,
-            i2c::IntegrationTime::Ms800 => float_raw * LX_BIT / 8.0
+        let it_gain: f64 = match integration_time {
+            i2c::IntegrationTime::Ms25 => 4.0,
+            i2c::IntegrationTime::Ms50 => 2.0,
+            i2c::IntegrationTime::Ms100 => 1.0,
+            i2c::IntegrationTime::Ms200 => 2.0,
+            i2c::IntegrationTime::Ms400 => 4.0,
+            i2c::IntegrationTime::Ms800 => 8.0
         };
 
-        lux = match gain {
-            i2c::Gain::X2 => lux,
-            i2c::Gain::X1 => lux * 2.0,
-            i2c::Gain::X1_4 => lux * 8.0,
-            i2c::Gain::X1_8 => lux * 16.0
+        // lux = 
+        let gain_factor: f64 = match gain {
+            i2c::Gain::X2 => 1.0,
+            i2c::Gain::X1 => 2.0,
+            i2c::Gain::X1_4 => 8.0,
+            i2c::Gain::X1_8 => 16.0
         };
 
-        Ok(lux)
-    }
+        let mut lux = LX_BIT * it_gain * gain_factor * f64::from(raw);
 
-    pub fn convert_from_lux(&mut self, lux: f32) -> Result<u16, LightSensorError> {
-        const LX_BIT: f32 = 0.0288;
-        let gain = self.dev.get_gain().unwrap();
-        let integration_time = self.dev.get_integration_time().unwrap();
-
-        let mut lux = match gain {
-            i2c::Gain::X2 => lux,
-            i2c::Gain::X1 => lux / 2.0,
-            i2c::Gain::X1_4 => lux / 8.0,
-            i2c::Gain::X1_8 => lux / 16.0
+        match gain {
+            i2c::Gain::X1_4 | i2c::Gain::X1_8 => {
+                // Compensate high lux
+                if lux > 1000.0 {
+                    lux = C3 * lux.powi(4) - C2 * lux.powi(3) + C1 * lux.powi(2) + C0 * lux;
+                }
+            },
+            _ => (),
         };
 
-        lux = match integration_time {
-            i2c::IntegrationTime::Ms25 => lux / (LX_BIT * 4.0),
-            i2c::IntegrationTime::Ms50 => lux / (LX_BIT * 2.0),
-            i2c::IntegrationTime::Ms100 => lux / (LX_BIT),
-            i2c::IntegrationTime::Ms200 => lux / (LX_BIT * 2.0),
-            i2c::IntegrationTime::Ms400 => lux / (LX_BIT * 4.0),
-            i2c::IntegrationTime::Ms800 => lux / (LX_BIT * 8.0)
-        };
-
-        Ok(lux as u16)
+        Ok(lux as f32)
 
     }
 
     pub fn get_ambient_light_lux(&mut self) -> Result<f32, LightSensorError> {
         let raw_lux = self.dev.get_ambient_light_output().unwrap();
 
-        let gain = self.dev.get_gain().unwrap();
-        let it = self.dev.get_integration_time().unwrap();
+        let lux = self.convert_raw_to_lux(raw_lux).unwrap();
+        Ok(lux)
 
-        let factor = get_lux_raw_conversion_factor(it, gain);
-        let lux = f64::from(raw_lux) * f64::from(factor);
-        if (gain == i2c::Gain::X1_4 || gain == i2c::Gain::X1_8) && lux > 1000.0 {
-            Ok(compensate_high_lux(lux) as f32)
-        } else {
-            Ok(lux as f32)
-        }
+        // let gain = self.dev.get_gain().unwrap();
+        // let it = self.dev.get_integration_time().unwrap();
+
+        // let factor = get_lux_raw_conversion_factor(it, gain);
+        // let lux = f64::from(raw_lux) * f64::from(factor);
+        // if (gain == i2c::Gain::X1_4 || gain == i2c::Gain::X1_8) && lux > 1000.0 {
+        //     Ok(compensate_high_lux(lux) as f32)
+        // } else {
+        //     Ok(lux as f32)
+        // }
 
     }
 
@@ -118,31 +109,31 @@ impl<I2C: I2c, Delay: DelayNs> LightSensor<I2C, Delay> {
 }
 
 
-fn get_lux_raw_conversion_factor(it: i2c::IntegrationTime, gain: i2c::Gain) -> f32 {
-    let gain_factor = match gain {
-        i2c::Gain::X2 => 1.0,
-        i2c::Gain::X1 => 2.0,
-        i2c::Gain::X1_4 => 8.0,
-        i2c::Gain::X1_8 => 16.0,
-    };
-    let it_factor = match it {
-        i2c::IntegrationTime::Ms800 => 0.0036,
-        i2c::IntegrationTime::Ms400 => 0.0072,
-        i2c::IntegrationTime::Ms200 => 0.0144,
-        i2c::IntegrationTime::Ms100 => 0.0288,
-        i2c::IntegrationTime::Ms50 => 0.0576,
-        i2c::IntegrationTime::Ms25 => 0.1152,
-    };
-    gain_factor * it_factor
-}
+// fn get_lux_raw_conversion_factor(it: i2c::IntegrationTime, gain: i2c::Gain) -> f32 {
+//     let gain_factor = match gain {
+//         i2c::Gain::X2 => 1.0,
+//         i2c::Gain::X1 => 2.0,
+//         i2c::Gain::X1_4 => 8.0,
+//         i2c::Gain::X1_8 => 16.0,
+//     };
+//     let it_factor = match it {
+//         i2c::IntegrationTime::Ms800 => 0.0036,
+//         i2c::IntegrationTime::Ms400 => 0.0072,
+//         i2c::IntegrationTime::Ms200 => 0.0144,
+//         i2c::IntegrationTime::Ms100 => 0.0288,
+//         i2c::IntegrationTime::Ms50 => 0.0576,
+//         i2c::IntegrationTime::Ms25 => 0.1152,
+//     };
+//     gain_factor * it_factor
+// }
 
 
-pub fn compensate_high_lux(lux: f64) -> f64 {
-    C3 * lux.powi(4)
-        - C2 * lux.powi(3)
-        + C1 * lux.powi(2)
-        + C0 * lux
-}
+// pub fn compensate_high_lux(lux: f64) -> f64 {
+//     C3 * lux.powi(4)
+//         - C2 * lux.powi(3)
+//         + C1 * lux.powi(2)
+//         + C0 * lux
+// }
 
 
 #[cfg(test)]
@@ -162,9 +153,9 @@ mod tests {
             I2cTransaction::write_read(address, vec![constants::registers::SETTING_REG], vec![0x00, 0x00]),
             I2cTransaction::write(address, vec![constants::registers::SETTING_REG, 0x00, 0x00]),
             I2cTransaction::write_read(address, vec![constants::registers::SETTING_REG], vec![0x00, 0x00]),
-            I2cTransaction::write(address, vec![constants::registers::SETTING_REG, 0x18, 0x00]),
-            I2cTransaction::write_read(address, vec![constants::registers::SETTING_REG], vec![0x18, 0x00]),
-            I2cTransaction::write(address, vec![constants::registers::SETTING_REG, 0x1A, 0x00]),
+            I2cTransaction::write(address, vec![constants::registers::SETTING_REG, 0x00, 0x18]),
+            I2cTransaction::write_read(address, vec![constants::registers::SETTING_REG], vec![0x00, 0x18]),
+            I2cTransaction::write(address, vec![constants::registers::SETTING_REG, 0x00, 0x1A]),
         ];
         let i2c = I2cMock::new(&expectations);
         let mut i2c_clone = i2c.clone();
