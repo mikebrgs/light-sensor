@@ -48,13 +48,13 @@ impl<I2C: I2c, Delay: DelayNs> LightSensor<I2C, Delay> {
         let gain = self.dev.get_gain().unwrap();
         let integration_time = self.dev.get_integration_time().unwrap();
 
-        let it_gain: f64 = match integration_time {
+        let it_factor: f64 = match integration_time {
             i2c::IntegrationTime::Ms25 => 4.0,
             i2c::IntegrationTime::Ms50 => 2.0,
             i2c::IntegrationTime::Ms100 => 1.0,
-            i2c::IntegrationTime::Ms200 => 2.0,
-            i2c::IntegrationTime::Ms400 => 4.0,
-            i2c::IntegrationTime::Ms800 => 8.0
+            i2c::IntegrationTime::Ms200 => 0.5,
+            i2c::IntegrationTime::Ms400 => 0.25,
+            i2c::IntegrationTime::Ms800 => 0.125
         };
 
         // lux = 
@@ -65,7 +65,11 @@ impl<I2C: I2c, Delay: DelayNs> LightSensor<I2C, Delay> {
             i2c::Gain::X1_8 => 16.0
         };
 
-        let mut lux = LX_BIT * it_gain * gain_factor * f64::from(raw);
+        let mut lux = LX_BIT * it_factor * gain_factor * f64::from(raw);
+        println!("raw: {}", raw);
+        println!("it_factor {}", it_factor);
+        println!("gain_factor {}", gain_factor);
+        println!("lux {}", lux);
 
         match gain {
             i2c::Gain::X1_4 | i2c::Gain::X1_8 => {
@@ -76,6 +80,11 @@ impl<I2C: I2c, Delay: DelayNs> LightSensor<I2C, Delay> {
             },
             _ => (),
         };
+
+        println!("raw: {}", raw);
+        println!("it_factor {}", it_factor);
+        println!("gain_factor {}", gain_factor);
+        println!("lux {}", lux);
 
         Ok(lux as f32)
 
